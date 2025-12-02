@@ -3,60 +3,105 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>3D Coffee Table — AR Viewer</title>
-  <meta name="description" content="Basit model-viewer tabanlı AR viewer. base.glb dosyasını kullanır." />
+  <title>AR — Open</title>
+  <meta name="robots" content="noindex">
   <style>
-    html,body { height:100%; margin:0; font-family: system-ui, -apple-system, Roboto, "Helvetica Neue", Arial; background:#111; color:#fff; display:flex; align-items:center; justify-content:center; }
-    .container { max-width:960px; width:100%; padding:16px; box-sizing:border-box; }
-    model-viewer { width:100%; height:70vh; background:linear-gradient(180deg,#222,#111); border-radius:12px; display:block; }
-    .controls { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
-    a.button { background:#1a73e8; color:white; padding:8px 12px; border-radius:8px; text-decoration:none; }
-    .note { margin-top:8px; color:#ccc; font-size:0.9rem; }
+    html,body{height:100%;margin:0;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,Arial}
+    .stage{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+    /* Desktop fallback görünümü küçük ve etkileşimsiz */
+    model-viewer{width:70vw;height:60vh;border-radius:8px;outline:none}
   </style>
-  <!-- model-viewer CDN -->
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <h1>3D Coffee Table — AR Viewer</h1>
-
-    <model-viewer
-      src="base.glb"
-      ios-src="base.usdz"
-      alt="3D Coffee Table"
+  <div class="stage" id="stage">
+    <!-- Desktop / fallback gösterim (kamera kontrolleri kapalı -> model sabit) -->
+    <model-viewer id="mv"
+      src=""
+      ios-src=""
+      alt="3D Model"
       ar
       ar-modes="webxr scene-viewer quick-look"
-      environment-image="neutral"
-      auto-rotate
-      camera-controls
-      shadow-intensity="1"
       exposure="1"
-    ></model-viewer>
-
-    <div class="controls">
-      <a class="button" href="base.glb" download>GLB İndir</a>
-      <a class="button" href="base.usdz" download>USDZ İndir (varsa)</a>
-      <a class="button" id="open-ar" href="#">AR'ı Aç</a>
-    </div>
-
-    <div class="note">
-      Not: Android (Scene Viewer) çoğu cihazda çalışır. iOS için Quick Look USDZ gerektirir.
-    </div>
+      shadow-intensity="0"
+      autoplay
+      style="display:none;">
+    </model-viewer>
+    <div id="message">Yönlendiriliyorsunuz...</div>
   </div>
 
   <script>
-    const mv = document.querySelector('model-viewer');
-    document.getElementById('open-ar').addEventListener('click', (e) => {
-      e.preventDefault();
-      if (mv && mv.enterAR) {
-        mv.enterAR().catch((err)=> {
-          console.warn('AR başlatılamadı:', err);
-          alert('AR başlatılamadı. Tarayıcı/cihaz AR desteklemeyebilir veya model bulunamıyor olabilir.');
-        });
-      } else {
-        alert('Tarayıcınız model-viewer enterAR() fonksiyonunu desteklemiyor.');
-      }
-    });
+    // --- AYAR: bu iki URL'yi kendi repo raw URL'lerinle eşleştir ---
+    // Örnek raw URL (repo kökünde base.glb ise):
+    const rawGlb = "https://raw.githubusercontent.com/elysiumluxary/3D-Coffe-Table/main/base.glb";
+    // Eğer iOS için base.usdz yüklediyseniz:
+    const rawUsdz = "https://raw.githubusercontent.com/elysiumluxary/3D-Coffe-Table/main/base.usdz";
+    // ---------------------------------------------------------------
+
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.MSStream;
+    const stage = document.getElementById('stage');
+    const mv = document.getElementById('mv');
+    const msg = document.getElementById('message');
+
+    function openAndroidSceneViewer() {
+      // Intent URL: Scene Viewer'ı doğrudan açar
+      const file = encodeURIComponent(rawGlb);
+      const fallback = encodeURIComponent(window.location.href);
+      const intentUrl = `intent://arvr.google.com/scene-viewer/1.0?file=${file}&mode=ar_preferred#Intent;scheme=https;package=com.google.android.googlequicksearchbox;action=android.intent.action.VIEW;S.browser_fallback_url=${fallback};end`;
+      // Tarayıcıyı yönlendir
+      window.location.href = intentUrl;
+    }
+
+    function openIOSQuickLook() {
+      // Quick Look: doğrudan .usdz linkine tıklatma
+      if (!rawUsdz) return false;
+      const a = document.createElement('a');
+      a.rel = 'ar';
+      a.href = rawUsdz;
+      // iOS Quick Look için görsel gerekmiyor; klikle
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return true;
+    }
+
+    function showFallbackViewer() {
+      // Masaüstü veya desteklenmeyen cihazlar için sade gösterim
+      msg.style.display = 'none';
+      mv.style.display = 'block';
+      mv.src = rawGlb;
+      mv.iosSrc = rawUsdz || "";
+      // Kamera kontrollerini kapattık (kullanıcı modelleri döndüremez)
+      mv.removeAttribute('camera-controls');
+      mv.removeAttribute('interaction-prompt');
+      // Kullanıcı ölçeği / zoom kapalı olacak şekilde bırakıyoruz (tarayıcı içinde etkileşim sınırlı)
+    }
+
+    // Ana akış: cihaz tipine göre doğrudan AR ya da fallback
+    if (isAndroid) {
+      // Bazı tarayıcılarda otomatik yönlendirme bloke edilebilir, bu yüzden önce kısa bir mesaj gösterip yönlendiriyoruz
+      msg.textContent = 'Android cihaz tespit edildi — Scene Viewer açılıyor...';
+      setTimeout(openAndroidSceneViewer, 200); // küçük bekleme -> yönlendirme
+    } else if (isIOS) {
+      msg.textContent = 'iPhone tespit edildi — Quick Look açılıyor...';
+      // Eğer .usdz yoksa fallback göster
+      setTimeout(() => {
+        if (!rawUsdz) {
+          msg.textContent = 'USDZ bulunamadı — tarayıcı görüntüleme moduna geçiliyor.';
+          setTimeout(showFallbackViewer, 400);
+        } else {
+          const ok = openIOSQuickLook();
+          if (!ok) {
+            msg.textContent = 'Quick Look açılamadı, sayfa görüntüleniyor.';
+            setTimeout(showFallbackViewer, 400);
+          }
+        }
+      }, 200);
+    } else {
+      // Masaüstü / diğer: fallback viewer göster
+      showFallbackViewer();
+    }
   </script>
 </body>
 </html>
